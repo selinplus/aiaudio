@@ -1,0 +1,18 @@
+{
+ "name": "aiaudio",
+ "description": "Enter your project description",
+ "author": {
+  "name": "selinplus",
+  "email": "selinplus@163.com"
+ },
+ "version": "0.1.0",
+ "binaryname": "aiaudio",
+ "frontend": {
+  "dir": "frontend",
+  "install": "npm install",
+  "build": "npm run build",
+  "bridge": "src",
+  "serve": "npm run serve"
+ },
+ "WailsVersion": ""
+}
