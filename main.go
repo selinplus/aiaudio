@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/leaanthony/mewn"
 	"github.com/wailsapp/wails"
+	"golang.org/x/net/websocket"
 	"time"
 )
 
@@ -18,6 +19,8 @@ type Result struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
+
+var wsConn *websocket.Conn
 
 func NewInfo() *Info {
 	result := &Info{
@@ -70,7 +73,7 @@ func main() {
 
 	js := mewn.String("./frontend/dist/app.js")
 	css := mewn.String("./frontend/dist/app.css")
-
+	wsConn = checkAndLinkServer()
 	app := wails.CreateApp(&wails.AppConfig{
 		Width:  1024,
 		Height: 768,
@@ -82,5 +85,10 @@ func main() {
 	app.Bind(basic)
 	app.Bind(Login)
 	app.Bind(NewInfo())
-	app.Run()
+	_ = app.Run()
+}
+func checkAndLinkServer() *websocket.Conn {
+	conn, err := websocket.Dial("ws://"+HOST, websocket.SupportedProtocolVersion, "http://"+HOST)
+	errCheck(err)
+	return conn
 }
