@@ -6,7 +6,7 @@
           <v-flex justify-center>
             <v-card class="elevation-12">
               <v-card-title  primary-title v-if="status">
-                 <v-icon color="red lighten-1" xLarge flat>record</v-icon>
+                 <v-icon color="red lighten-1" xLarge flat>record_voice_over</v-icon>
               </v-card-title>
               <v-card-text align-center>                
                 <v-btn flat large outline @click="start" fluid>

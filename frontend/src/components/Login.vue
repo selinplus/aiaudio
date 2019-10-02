@@ -38,7 +38,7 @@
               </v-card-text>
               <v-card-actions>
                 <v-spacer></v-spacer>
-                <v-btn color="amber" @click="doLogin">登录</v-btn>
+                <v-btn @click="doLogin">登录</v-btn>
               </v-card-actions>
             </v-card>
             <v-card class="elevation-12">
