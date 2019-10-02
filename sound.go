@@ -94,7 +94,7 @@ func recordSeg(ctx context.Context) {
 	}
 }
 func aliTranslate(in InVoice) {
-	auth := asr.GetAuth("LTAI4FxURV2oXxSNfWEiSJ6K", "MXGeKguYwVlyw0gd5rMWuoSn6LVHrM")
+	auth := asr.GetAuth("", "")
 	fw, _ := filepath.Abs(in.file)
 	bytesOfFile, _ := ioutil.ReadFile(fw)
 	result, e := auth.GetOneWord(bytesOfFile)
@@ -111,7 +111,7 @@ func tecentTranslate(i InVoice) {
 	expiredStamp := time.Now().AddDate(0, 0, 2).Unix()
 	unique := RandStringBytesMaskImpr(16)
 	signStr := fmt.Sprintf(signTemplate, i.end, expiredStamp, i.seq, timeStamp, unique)
-	secretKey := `Zy94k5E8pHUSAdw1rSqzsXxHL9hz2pMd`
+	secretKey := ``
 
 	mac := hmac.New(sha1.New, []byte(secretKey))
 	mac.Write([]byte(signStr))
