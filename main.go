@@ -20,8 +20,6 @@ type Result struct {
 	Msg  string `json:"msg"`
 }
 
-var wsConn *websocket.Conn
-
 func NewInfo() *Info {
 	result := &Info{
 		Title:   "",
@@ -41,14 +39,17 @@ func (i *Info) getVersion() string {
 	return i.Version
 }
 func (i *Info) WailsInit(runtime *wails.Runtime) error {
+	var wsConn *websocket.Conn
 	ctx, cancel := context.WithCancel(context.Background())
 	runtime.Events.On("start", func(optionalData ...interface{}) {
 		fmt.Printf("%v start rec\n", time.Now().UnixNano())
 		runtime.Events.Emit("NEWS", "录制开始", time.Now().Format("2006-01-02 15:04:05"))
-		go recordSeg(ctx)
+		wsConn = checkAndLinkServer()
+		go soundBiz(ctx, wsConn)
 	})
 	runtime.Events.On("end", func(optionalData ...interface{}) {
 		fmt.Printf("%v end rec\n", time.Now().UnixNano())
+
 		cancel()
 		runtime.Events.Emit("NEWS", "录制结束", time.Now().Format("2006-01-02 15:04:05"))
 	})
@@ -73,7 +74,7 @@ func main() {
 
 	js := mewn.String("./frontend/dist/app.js")
 	css := mewn.String("./frontend/dist/app.css")
-	wsConn = checkAndLinkServer()
+
 	app := wails.CreateApp(&wails.AppConfig{
 		Width:  1024,
 		Height: 768,
@@ -86,9 +87,4 @@ func main() {
 	app.Bind(Login)
 	app.Bind(NewInfo())
 	_ = app.Run()
-}
-func checkAndLinkServer() *websocket.Conn {
-	conn, err := websocket.Dial("ws://"+HOST, websocket.SupportedProtocolVersion, "http://"+HOST)
-	errCheck(err)
-	return conn
 }
