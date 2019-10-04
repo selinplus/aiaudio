@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/leaanthony/mewn"
 	"github.com/wailsapp/wails"
-	"golang.org/x/net/websocket"
+	//"golang.org/x/net/websocket"
 	"time"
 )
 
@@ -39,13 +39,14 @@ func (i *Info) getVersion() string {
 	return i.Version
 }
 func (i *Info) WailsInit(runtime *wails.Runtime) error {
-	var wsConn *websocket.Conn
+	//var wsConn *websocket.Conn
 	ctx, cancel := context.WithCancel(context.Background())
 	runtime.Events.On("start", func(optionalData ...interface{}) {
 		fmt.Printf("%v start rec\n", time.Now().UnixNano())
 		runtime.Events.Emit("NEWS", "录制开始", time.Now().Format("2006-01-02 15:04:05"))
-		wsConn = checkAndLinkServer()
-		go soundBiz(ctx, wsConn)
+		//wsConn = checkAndLinkServer()
+		//go soundBiz(ctx, wsConn)
+		go recordSeg(ctx)
 	})
 	runtime.Events.On("end", func(optionalData ...interface{}) {
 		fmt.Printf("%v end rec\n", time.Now().UnixNano())
