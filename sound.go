@@ -18,10 +18,12 @@ import (
 )
 
 type InVoice struct {
-	file string
+	buff []byte
 	seq  int
 	end  int
 }
+
+var seg = make([]byte, 0)
 
 func recordSeg(ctx context.Context) {
 
@@ -31,10 +33,10 @@ func recordSeg(ctx context.Context) {
 	// www.people.csail.mit.edu/hubert/pyaudio/  - under the Record tab
 	inputChannels := 1
 	outputChannels := 0
-	sampleRate := 16000
+	sampleRate := 8000
 	//framesPerBuffer := make([]byte, 64)
 	framesPerBuffer := make([]byte, 1000)
-	//var seg []byte
+
 	// init PortAudio
 
 	_ = portaudio.Initialize()
@@ -58,21 +60,23 @@ func recordSeg(ctx context.Context) {
 	fmt.Println("----------init------")
 	errCheck(stream.Start())
 	var seq int
-	//var tick = time.Tick(3000 * time.Millisecond)
+	var tick = time.Tick(5000 * time.Millisecond)
 	for {
 		errCheck(stream.Read())
 		select {
-		//case <-tick:
-		//	in := InVoice{"", seq, 0}
-		//	fmt.Println("---------TICK-------")
-		//	//go aliTranslate(in)
-		//	go tecentTranslate(in, seg)
-		//	seq++
-		//
-		//	errCheck(err)
+		case <-tick:
+			in := &InVoice{seg, seq, 0}
+			fmt.Println("---------TICK-------")
+			//go aliTranslate(in)
+			//go tecentTranslate(in, seg)
+			go baiduTranslate(in)
+			seq++
+
+			errCheck(err)
 		case <-ctx.Done():
-			in := InVoice{"", seq, 1}
-			go tecentTranslate(in, framesPerBuffer)
+			in := &InVoice{seg, seq, 1}
+			go baiduTranslate(in)
+			//go tecentTranslate(in, framesPerBuffer)
 			_ = stream.Close()
 			_ = portaudio.Terminate()
 			return
@@ -80,9 +84,10 @@ func recordSeg(ctx context.Context) {
 			// write to wave file
 			//_, err := waveWriter.WriteSample16(framesPerBuffer) // WriteSample16 for 16 bits
 			//seg = append(seg, framesPerBuffer...)
-			in := InVoice{"", seq, 0}
-			seq++
-			go tecentTranslate(in, framesPerBuffer)
+			seg = append(seg, framesPerBuffer...)
+			//in := InVoice{seg, seq, 0}
+			//seq++
+			//go tecentTranslate(in, framesPerBuffer)
 			errCheck(err)
 		}
 	}
@@ -108,43 +113,68 @@ type BaiduReqBody struct {
 	Len     int    `json:"len"`
 }
 
-func baiduTranslate(in InVoice) {
+var accessToken string
+
+func baiduTranslate(in *InVoice) {
 
 	at := getAccessToken()
 	uri := `https://aip.baidubce.com/rpc/2.0/bicc/v1/general?access_token=` + at
 	cli := &http.Client{}
-
-	var body = BaiduReqBody{Format: "pcm", Rate: 8000, DevPid: 0, Channel: 1, Cuid: "IYTU@selinplus", Speech: in.file, Len: 22}
+	speech := base64.StdEncoding.EncodeToString(in.buff)
+	var body = BaiduReqBody{
+		Format:  "pcm",
+		Rate:    8000,
+		DevPid:  0,
+		Channel: 1,
+		Cuid:    "selinplus@163.com",
+		Speech:  speech,
+		Len:     len(in.buff),
+	}
 	bb, err := json.Marshal(&body)
 	req, err := http.NewRequest("POST", uri, bytes.NewReader(bb))
+	//noinspection GoNilness
+	req.Header.Add("Content-Type", "application/json")
 	if err != nil {
 		errCheck(err)
 	}
-	cli.Do(req)
-
+	res, err := cli.Do(req)
+	errCheck(err)
+	defer res.Body.Close()
+	bd, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		fmt.Printf("ReadAll err=%v\n", err)
+		return
+	}
+	seg = make([]byte, 0)
+	fmt.Printf("seq is %d,BODY = %v\n", in.seq, string(bd))
 }
 func getAccessToken() string {
-	var bats = BaiduAccessTokenRes{}
-	accessTokenUrl := `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=cKpjeMvYmO0dLEHOH9KYRR0O&client_secret=1D9iSmFR2kIHinbuMbEAdeHfluhTYott&`
-	cli := &http.Client{}
-	req, err := http.NewRequest("POST", accessTokenUrl, nil)
-	res, err := cli.Do(req)
-	if err != nil {
-		fmt.Printf("EE:%v\n", err)
-	}
-	defer res.Body.Close()
+	if accessToken != "" {
+		return accessToken
+	} else {
+		var bats = BaiduAccessTokenRes{}
+		accessTokenUrl := `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=cKpjeMvYmO0dLEHOH9KYRR0O&client_secret=1D9iSmFR2kIHinbuMbEAdeHfluhTYott&`
+		cli := &http.Client{}
+		req, err := http.NewRequest("POST", accessTokenUrl, nil)
+		res, err := cli.Do(req)
+		if err != nil {
+			fmt.Printf("EE:%v\n", err)
+		}
+		defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
-	err = json.Unmarshal(body, &bats)
-	if err != nil {
-		fmt.Printf("unmarshal error err=%v\n", err)
-		return ""
+		body, err := ioutil.ReadAll(res.Body)
+		err = json.Unmarshal(body, &bats)
+		if err != nil {
+			fmt.Printf("unmarshal error err=%v\n", err)
+			return ""
+		}
+		accessToken = bats.AccessToken
+		return bats.AccessToken
 	}
-	return bats.AccessToken
 }
 func aliTranslate(in InVoice) {
 	auth := asr.GetAuth("", "")
-	fw, _ := filepath.Abs(in.file)
+	fw, _ := filepath.Abs("in.file")
 	bytesOfFile, _ := ioutil.ReadFile(fw)
 	result, e := auth.GetOneWord(bytesOfFile)
 	if e != nil {
