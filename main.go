@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/leaanthony/mewn"
@@ -19,6 +18,8 @@ type Result struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
+
+var endChan = make(chan struct{})
 
 func NewInfo() *Info {
 	result := &Info{
@@ -40,18 +41,18 @@ func (i *Info) getVersion() string {
 }
 func (i *Info) WailsInit(runtime *wails.Runtime) error {
 	//var wsConn *websocket.Conn
-	ctx, cancel := context.WithCancel(context.Background())
+	//ctx, cancel := context.WithCancel(context.Background())
 	runtime.Events.On("start", func(optionalData ...interface{}) {
 		fmt.Printf("%v start rec\n", time.Now().UnixNano())
 		runtime.Events.Emit("NEWS", "录制开始", time.Now().Format("2006-01-02 15:04:05"))
-		//wsConn = checkAndLinkServer()
+		//wsConn := checkAndLinkServer()
 		//go soundBiz(ctx, wsConn)
-		go recordSeg(ctx)
+		go recordSeg()
 	})
 	runtime.Events.On("end", func(optionalData ...interface{}) {
 		fmt.Printf("%v end rec\n", time.Now().UnixNano())
 
-		cancel()
+		endChan <- struct{}{}
 		runtime.Events.Emit("NEWS", "录制结束", time.Now().Format("2006-01-02 15:04:05"))
 	})
 	return nil

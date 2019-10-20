@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -21,21 +21,18 @@ type InVoice struct {
 	buff []byte
 	seq  int
 	end  int
+	vid  string
 }
 
-var seg = make([]byte, 0)
-
-func recordSeg(ctx context.Context) {
-
+func recordSeg() {
+	var seg = make([]int16, 0)
 	defer func() {
 		fmt.Println("-----over-----")
 	}()
-	// www.people.csail.mit.edu/hubert/pyaudio/  - under the Record tab
 	inputChannels := 1
 	outputChannels := 0
 	sampleRate := 8000
-	//framesPerBuffer := make([]byte, 64)
-	framesPerBuffer := make([]byte, 1000)
+	framesPerBuffer := make([]int16, 1024)
 
 	// init PortAudio
 
@@ -59,24 +56,38 @@ func recordSeg(ctx context.Context) {
 	// start reading from microphone
 	fmt.Println("----------init------")
 	errCheck(stream.Start())
+	tick := time.Tick(2000 * time.Millisecond)
+	//client := getTcClient()
 	var seq int
-	var tick = time.Tick(5000 * time.Millisecond)
+	vid := RandStringBytesMaskImpr(16)
 	for {
 		errCheck(stream.Read())
 		select {
 		case <-tick:
-			in := &InVoice{seg, seq, 0}
 			fmt.Println("---------TICK-------")
-			//go aliTranslate(in)
-			//go tecentTranslate(in, seg)
-			go baiduTranslate(in)
+			fmt.Printf("---seg len is %d---\n", len(seg))
+			transeg := make([]int16, len(seg))
+			copy(transeg, seg)
+			//go baiduTranslate(transeg)
+			//auKey := RandStringBytesMaskImpr(8)
+			b := int16ToByte(transeg)
+			//TcTrans(b, auKey, client)
+			in := InVoice{buff: b, seq: seq, end: 0, vid: vid}
 			seq++
-
+			go tecentTranslate(in)
+			seg = make([]int16, 0)
 			errCheck(err)
-		case <-ctx.Done():
-			in := &InVoice{seg, seq, 1}
-			go baiduTranslate(in)
-			//go tecentTranslate(in, framesPerBuffer)
+		case <-endChan:
+			fmt.Printf("---ctx done seg len is %d---\n", len(seg))
+			transeg := make([]int16, len(seg))
+			copy(transeg, seg)
+			//go baiduTranslate(transeg)
+			//auKey := RandStringBytesMaskImpr(8)
+			b := int16ToByte(transeg)
+			//TcTrans(b, auKey, client)
+			in := InVoice{buff: b, seq: seq, end: 1, vid: vid}
+			seq++
+			go tecentTranslate(in)
 			_ = stream.Close()
 			_ = portaudio.Terminate()
 			return
@@ -87,7 +98,6 @@ func recordSeg(ctx context.Context) {
 			seg = append(seg, framesPerBuffer...)
 			//in := InVoice{seg, seq, 0}
 			//seq++
-			//go tecentTranslate(in, framesPerBuffer)
 			errCheck(err)
 		}
 	}
@@ -95,7 +105,7 @@ func recordSeg(ctx context.Context) {
 
 type BaiduAccessTokenRes struct {
 	RefreshToken     string `json:"refresh_token"`
-	ExpiresIn        string `json:"expires_in"`
+	ExpiresIn        int64  `json:"expires_in"`
 	Scope            string `json:"scope"`
 	SessionKey       string `json:"session_key"`
 	AccessToken      string `json:"access_token"`
@@ -115,12 +125,25 @@ type BaiduReqBody struct {
 
 var accessToken string
 
-func baiduTranslate(in *InVoice) {
+func baiduTranslate(seg []int16) {
 
 	at := getAccessToken()
 	uri := `https://aip.baidubce.com/rpc/2.0/bicc/v1/general?access_token=` + at
 	cli := &http.Client{}
-	speech := base64.StdEncoding.EncodeToString(in.buff)
+	cfg := &tls.Config{
+		MaxVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+	}
+	cli.Transport = &http.Transport{
+		TLSClientConfig: cfg,
+	}
+	b := make([]byte, 0)
+	for _, i16 := range seg {
+		var h, l = uint8(i16 >> 8), uint8(i16 & 0xff)
+		b = append(b, l)
+		b = append(b, h)
+	}
+	speech := base64.StdEncoding.EncodeToString(b)
 	var body = BaiduReqBody{
 		Format:  "pcm",
 		Rate:    8000,
@@ -128,16 +151,13 @@ func baiduTranslate(in *InVoice) {
 		Channel: 1,
 		Cuid:    "selinplus@163.com",
 		Speech:  speech,
-		Len:     len(in.buff),
+		Len:     len(seg),
 	}
 	bb, err := json.Marshal(&body)
-	req, err := http.NewRequest("POST", uri, bytes.NewReader(bb))
-	//noinspection GoNilness
-	req.Header.Add("Content-Type", "application/json")
+	res, err := cli.Post(uri, "Content-Type:application/json", bytes.NewReader(bb))
 	if err != nil {
 		errCheck(err)
 	}
-	res, err := cli.Do(req)
 	errCheck(err)
 	defer res.Body.Close()
 	bd, err := ioutil.ReadAll(res.Body)
@@ -145,24 +165,34 @@ func baiduTranslate(in *InVoice) {
 		fmt.Printf("ReadAll err=%v\n", err)
 		return
 	}
-	seg = make([]byte, 0)
-	fmt.Printf("seq is %d,BODY = %v\n", in.seq, string(bd))
+	fmt.Printf("BODY = %v\n", string(bd))
 }
 func getAccessToken() string {
 	if accessToken != "" {
+		fmt.Println("----factory access token return----")
 		return accessToken
 	} else {
 		var bats = BaiduAccessTokenRes{}
-		accessTokenUrl := `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=cKpjeMvYmO0dLEHOH9KYRR0O&client_secret=1D9iSmFR2kIHinbuMbEAdeHfluhTYott&`
+		accessTokenUrl := `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=gLPovGQHXUL47so5qGCyG0Fu&client_secret=1boFq32mwPGG86AlSEf7DHezphRu5ylA`
 		cli := &http.Client{}
+		cfg := &tls.Config{
+			MaxVersion:               tls.VersionTLS11, // try tls.VersionTLS10 if this doesn't work
+			PreferServerCipherSuites: true,
+		}
+		cli.Transport = &http.Transport{
+			TLSClientConfig: cfg,
+		}
 		req, err := http.NewRequest("POST", accessTokenUrl, nil)
+		req.Header.Add("Content-Type", "application/json; charset=UTF-8")
 		res, err := cli.Do(req)
 		if err != nil {
 			fmt.Printf("EE:%v\n", err)
+			return ""
 		}
 		defer res.Body.Close()
 
 		body, err := ioutil.ReadAll(res.Body)
+		fmt.Println(string(body))
 		err = json.Unmarshal(body, &bats)
 		if err != nil {
 			fmt.Printf("unmarshal error err=%v\n", err)
@@ -182,32 +212,34 @@ func aliTranslate(in InVoice) {
 	}
 	fmt.Println(result)
 }
-func tecentTranslate(i InVoice, seg []byte) {
+func tecentTranslate(i InVoice) {
 	//fw, _ := filepath.Abs(i.file)
 
-	signTemplate := `POSTasr.cloud.tencent.com/asr/v1/1258311667?end=%d&engine_model_type=16k_0&expired=%d&needvad=0&nonce=52811334&projectid=0&res_type=1&result_text_format=0&secretid=AKID5HNNI69U2UCqPs4dv7FZlsqeIn9LujFf&seq=%d&source=0&sub_service_type=1&timeout=5000&timestamp=%d&voice_format=1&voice_id=%s`
+	signTemplate := `POSTasr.cloud.tencent.com/asr/v1/1258311667?end=%d&engine_model_type=8k_0&expired=%d&needvad=1&nonce=52811334&projectid=0&res_type=1&result_text_format=0&secretid=AKID5HNNI69U2UCqPs4dv7FZlsqeIn9LujFf&seq=%d&source=0&sub_service_type=1&timeout=5000&timestamp=%d&voice_format=1&voice_id=%s`
 	timeStamp := time.Now().Unix()
 	expiredStamp := time.Now().AddDate(0, 0, 2).Unix()
-	unique := RandStringBytesMaskImpr(16)
-	signStr := fmt.Sprintf(signTemplate, i.end, expiredStamp, i.seq, timeStamp, unique)
+	//unique := RandStringBytesMaskImpr(16)
+	signStr := fmt.Sprintf(signTemplate, i.end, expiredStamp, i.seq, timeStamp, i.vid)
 	secretKey := `Zy94k5E8pHUSAdw1rSqzsXxHL9hz2pMd`
 
 	mac := hmac.New(sha1.New, []byte(secretKey))
 	mac.Write([]byte(signStr))
 	sign := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 
-	reqTemplate := `http://asr.cloud.tencent.com/asr/v1/1258311667?end=%d&engine_model_type=16k_0&expired=%d&needvad=0&nonce=52811334&projectid=0&res_type=1&result_text_format=0&secretid=AKID5HNNI69U2UCqPs4dv7FZlsqeIn9LujFf&seq=%d&source=0&sub_service_type=1&timeout=5000&timestamp=%d&voice_format=1&voice_id=%s`
-	reqStr := fmt.Sprintf(reqTemplate, i.end, expiredStamp, i.seq, timeStamp, unique)
+	reqTemplate := `http://asr.cloud.tencent.com/asr/v1/1258311667?end=%d&engine_model_type=8k_0&expired=%d&needvad=1&nonce=52811334&projectid=0&res_type=1&result_text_format=0&secretid=AKID5HNNI69U2UCqPs4dv7FZlsqeIn9LujFf&seq=%d&source=0&sub_service_type=1&timeout=5000&timestamp=%d&voice_format=1&voice_id=%s`
+	reqStr := fmt.Sprintf(reqTemplate, i.end, expiredStamp, i.seq, timeStamp, i.vid)
 
 	fmt.Printf("URL: %s\n", reqStr)
-	fmt.Printf("LEN is : %d\n", len(seg))
-	reader := bytes.NewReader(seg)
+	fmt.Printf("LEN is : %d\n", len(i.buff))
+	reader := bytes.NewReader(i.buff)
 	cli := &http.Client{}
+
 	req, err := http.NewRequest("POST", reqStr, reader)
 	req.Header.Add("Host", "asr.cloud.tencent.com")
 	req.Header.Add("Authorization", sign)
 	req.Header.Add("Content-Type", "application/octet-stream")
-	req.Header.Add("Content-Length", strconv.Itoa(len(seg)))
+	req.Header.Add("Content-Length", strconv.Itoa(len(i.buff)))
+
 	res, err := cli.Do(req)
 	if err != nil {
 		fmt.Printf("EE:%v\n", err)
@@ -218,7 +250,6 @@ func tecentTranslate(i InVoice, seg []byte) {
 		fmt.Printf("ReadAll err=%v\n", err)
 		return
 	}
-	seg = make([]byte, 0)
 	fmt.Printf("seq is %d,BODY = %v\n", i.seq, string(body))
 }
 func errCheck(err error) {

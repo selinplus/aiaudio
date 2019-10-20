@@ -69,6 +69,8 @@ github.com/stretchr/testify v1.2.1/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXf
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/tencentcloud/tencentcloud-sdk-go v3.0.93+incompatible h1:xiQJy0uGz30zrJHIV++RV/onHsQZRCid12ViwsooWq0=
+github.com/tencentcloud/tencentcloud-sdk-go v3.0.93+incompatible/go.mod h1:0PfYow01SHPMhKY31xa+EFz2RStxIqj6JFAJS+IkCi4=
 github.com/wailsapp/wails v0.17.0 h1:5Z8VN0vnz0VeKLe/rPzpWHczxYe6SXv5FcMSg256jyg=
 github.com/wailsapp/wails v0.17.0/go.mod h1:ZmxUrz4se4kaBwTso2UMB2UmNwi2Vrcr5IjlzD/b/S4=
 github.com/wailsapp/webview v0.2.7 h1:fN5L5H9Oivg9IJPk7uaXQnjqB68Fny11ZWkIaTIZHmk=

@@ -9,8 +9,9 @@
                  <v-icon color="red lighten-1" xLarge flat>record_voice_over</v-icon>
               </v-card-title>
               <v-card-text align-center>                
-                <v-btn flat large outline @click="start" fluid>
-                   <v-icon>speaker_phone</v-icon>                  
+                <v-btn flat large outline @click="switcher" fluid>
+                   <v-icon v-if="status">stop</v-icon>
+                   <v-icon v-else>speaker_phone</v-icon>
                  </v-btn>
               </v-card-text>
               <v-card-actions>
@@ -52,7 +53,7 @@ export default {
     })
   },
   methods:{
-    start(){
+    switcher(){
       if(this.status){
         window.wails.Events.Emit('end')
       }else{
@@ -60,10 +61,6 @@ export default {
       }      
       this.status =!this.status
     },
-    end(){
-      window.wails.Events.Emit('end')
-      this.status =!this.status
-    },    
   }
 }
 </script>

@@ -7,15 +7,7 @@
             <v-card class="elevation-12">
               <v-toolbar dark>
                 <v-toolbar-title>{{title}}</v-toolbar-title>
-                <v-spacer></v-spacer>
-                <v-tooltip bottom>
-                  <template v-slot:activator="{ on }">
-                    <v-btn :href="source" icon large target="_blank" v-on="on">
-                      <v-icon large>code</v-icon>
-                    </v-btn>
-                  </template>
-                  <span>Source</span>
-                </v-tooltip>
+                <v-spacer></v-spacer>                
               </v-toolbar>
               <v-card-text>
                 <v-form>

@@ -7,7 +7,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var HOST = "120.27.22.145"
+var HOST = "129.211.114.37:4445"
 
 var END_TAG = "{\"end\": true}"
 
@@ -19,12 +19,12 @@ func checkAndLinkServer() *websocket.Conn {
 }
 
 func soundBiz(ctx context.Context, wsConn *websocket.Conn) {
-	var frameChan = make(chan []byte)
+	var frameChan = make(chan []int16)
 	sliceSize := 1280 * 10
 	inputChannels := 1
 	outputChannels := 0
 	sampleRate := 16000
-	framesPerBuffer := make([]byte, sliceSize)
+	framesPerBuffer := make([]int16, sliceSize)
 
 	// init PortAudio
 	err := portaudio.Initialize()
@@ -47,12 +47,18 @@ func soundBiz(ctx context.Context, wsConn *websocket.Conn) {
 		}
 	}
 }
-func sendToServer(frameChan chan []byte, wsConn *websocket.Conn) {
+func sendToServer(frameChan chan []int16, wsConn *websocket.Conn) {
 	for {
 		select {
 		case fb := <-frameChan:
-			err := websocket.Message.Send(wsConn, fb)
-			if string(fb) == END_TAG {
+			b := make([]uint8, 0)
+			for _, i16 := range fb {
+				var h, l = uint8(i16 >> 8), uint8(i16 & 0xff)
+				b = append(b, l)
+				b = append(b, h)
+			}
+			err := websocket.Message.Send(wsConn, b)
+			if string(b) == END_TAG {
 				break
 			}
 			errCheck(err)

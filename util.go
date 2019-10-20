@@ -29,3 +29,12 @@ func RandStringBytesMaskImpr(n int) string {
 
 	return string(b)
 }
+func int16ToByte(src []int16) []byte {
+	b := make([]byte, 0)
+	for _, i16 := range src {
+		var h, l = uint8(i16 >> 8), uint8(i16 & 0xff)
+		b = append(b, l)
+		b = append(b, h)
+	}
+	return b
+}
